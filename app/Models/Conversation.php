@@ -8,4 +8,18 @@ use Illuminate\Database\Eloquent\Model;
 class Conversation extends Model
 {
     use HasFactory;
+
+    protected $guarded = [];
+
+     protected $fillable = ['title','is_group'];
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class)->withTimestamps()->withPivot('last_read_at');
+    }
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class)->latest();
+    }
 }

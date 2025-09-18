@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Message;
+use App\Models\Conversation;
+use App\Events\MessageSent;
 use Illuminate\Http\Request;
 
 class MessageController extends Controller
@@ -12,9 +14,11 @@ class MessageController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Conversation $conversation)
     {
-        //
+        $this->authorize('view', $conversation); // create a policy or simple check
+        $messages = $conversation->messages()->with('user')->latest()->paginate(30);
+        return response()->json($messages);
     }
 
     /**
@@ -33,9 +37,31 @@ class MessageController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(Request $request)
+    public function store(Request $request, Conversation $conversation)
     {
-        //
+         $this->authorize('participate', $conversation);
+        $data = $request->validate([
+            'body' => 'nullable|string',
+            'attachment' => 'nullable|file|max:10240',
+        ]);
+
+        $attachmentPath = null;
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('attachments', 'public');
+        }
+
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $request->user()->id,
+            'body' => $data['body'] ?? null,
+            'attachment' => $attachmentPath,
+            'status' => 'sent',
+        ]);
+
+        // Broadcast message
+        broadcast(new MessageSent($message->load('user')))->toOthers();
+
+        return response()->json($message->load('user'), 201);
     }
 
     /**

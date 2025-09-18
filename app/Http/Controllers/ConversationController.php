@@ -14,7 +14,13 @@ class ConversationController extends Controller
      */
     public function index()
     {
-        //
+         $user = $request->user();
+
+        $conversations = $user->conversations()
+            ->with(['users', 'messages' => function($q) { $q->latest()->limit(1); }])
+            ->get();
+
+        return response()->json($conversations);
     }
 
     /**
@@ -35,7 +41,22 @@ class ConversationController extends Controller
      */
     public function store(Request $request)
     {
-        //
+         $request->validate(['user_id' => 'required|exists:users,id']);
+        $meId = $request->user()->id;
+        $otherId = $request->user_id;
+
+        $conversation = Conversation::where('is_group', false)
+            ->whereHas('users', fn($q) => $q->where('user_id', $meId))
+            ->whereHas('users', fn($q) => $q->where('user_id', $otherId))
+            ->first();
+
+        if (!$conversation) {
+            $conversation = Conversation::create();
+            $conversation->users()->attach([$meId, $otherId]);
+        }
+
+        return response()->json($conversation->load('users'));
+      
     }
 
     /**
